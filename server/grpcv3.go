@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"log/slog"
 	"strings"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -20,6 +22,7 @@ func (s *JarlAuthzServerV3) logRequest(allow string, request *authv3.CheckReques
 	log.Printf("[gRPCv3][%s]: %s%s, attributes: %v\n", allow, httpAttrs.GetHost(),
 		httpAttrs.GetPath(),
 		request.GetAttributes())
+	slog.Info(fmt.Sprintf("gRPCv3 request %s", allow), slog.String("outcome", allow), slog.Any("attributes", request.GetAttributes()), slog.Any("path", httpAttrs.GetPath()))
 }
 
 func (s *JarlAuthzServerV3) allow(request *authv3.CheckRequest) *authv3.CheckResponse {
