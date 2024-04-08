@@ -22,29 +22,40 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/fredjeck/jarl/config"
+	"github.com/fredjeck/jarl/logging"
 	"github.com/fredjeck/jarl/server"
 )
 
 var (
-	httpPort = flag.String("http", "8000", "HTTP server port")
-	grpcPort = flag.String("grpc", "9000", "gRPC server port")
+	httpPort      = flag.String("http", "8000", "HTTP server port")
+	grpcPort      = flag.String("grpc", "9000", "gRPC server port")
+	header        = flag.String("header", "x-forwarded-sub", "HTTP Header key identifying the connected client")
+	configuration = flag.String("clients", "/var/run/jarl/clients", "Folder containing the clients configurations")
 )
 
 func main() {
 
-	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}
-
-	var logger *slog.Logger
-
-	logger = slog.New(slog.NewJSONHandler(os.Stdout, opts))
-
-	slog.SetDefault(logger)
+	logging.Setup()
 
 	flag.Parse()
-	s := server.NewJarlAuthzServer(fmt.Sprintf(":%s", *httpPort), fmt.Sprintf(":%s", *grpcPort))
-	go s.Run()
+
+	conf := &config.Configuration{
+		HTTPListenOn:             fmt.Sprintf(":%s", *httpPort),
+		GRPCListenOn:             fmt.Sprintf(":%s", *grpcPort),
+		HTTPAuthZHeader:          *header,
+		ClientsConfigurationPath: *configuration,
+	}
+
+	auths, err := config.LoadAllAuthorizations(*configuration)
+	if err != nil {
+		slog.Error(fmt.Sprintf("unable to load client configurations from '%s'", *configuration), slog.Any("error", logging.KeyError))
+		os.Exit(1)
+	}
+	conf.Authorizations = auths
+
+	s := server.NewJarlAuthzServer(conf)
+	go s.Start()
 	defer s.Stop()
 
 	// Wait for the process to be shutdown.

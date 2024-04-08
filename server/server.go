@@ -1,20 +1,21 @@
+// Package server - Jarl Authz Server
 package server
 
 import (
-	"flag"
 	"fmt"
 	"sync"
+
+	"github.com/fredjeck/jarl/config"
 )
 
 const (
-	checkHeader       = "x-ext-authz"
-	allowedValue      = "allow"
-	resultHeader      = "x-ext-authz-check-result"
-	receivedHeader    = "x-ext-authz-check-received"
-	overrideHeader    = "x-ext-authz-additional-header-override"
-	overrideGRPCValue = "grpc-additional-header-override-value"
-	resultAllowed     = "allowed"
-	resultDenied      = "denied"
+	allowedValue   = "allow"
+	resultHeader   = "x-ext-authz-check-result"
+	receivedHeader = "x-ext-authz-check-received"
+	// NOT IMPLEMENTED YET overrideHeader    = "x-ext-authz-additional-header-override"
+	// NOT IMPLEMENTED YET overrideGRPCValue = "grpc-additional-header-override-value"
+	resultAllowed = "allowed"
+	resultDenied  = "denied"
 )
 
 // ServingStatus indicates the serving status of the Authz servers
@@ -25,28 +26,14 @@ const (
 	Stopped                      // Stopped for some reasons - check logs for details
 )
 
-var (
-	serviceAccount = flag.String("allow_service_account", "a",
-		"allowed service account, matched against the service account in the source principal from the client certificate")
-	denyBody = fmt.Sprintf("denied by ext_authz for not found header `%s: %s` in the request", checkHeader, allowedValue)
-)
-
-// ExtAuthzServer implements the ext_authz v2/v3 gRPC and HTTP check request API.
+// JarlAuthzServer implements the ext_authz v2/v3 gRPC and HTTP Envoy check request API.
 type JarlAuthzServer struct {
-	grpcServer *GrpcAuthz
-	httpServer *HttpAuthz
+	grpcServer *GRPCAuthzServer
+	httpServer *HTTPAuthzServer
 }
 
-func returnIfNotTooLong(body string) string {
-	// Maximum size of a header accepted by Envoy is 60KiB, so when the request body is bigger than 60KB,
-	// we don't return it in a response header to avoid rejecting it by Envoy and returning 431 to the client
-	if len(body) > 60000 {
-		return "<too-long>"
-	}
-	return body
-}
-
-func (s *JarlAuthzServer) Run() {
+// Start starts listening for inbound Authz connections on both HTTP and GRPC ports
+func (s *JarlAuthzServer) Start() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go s.httpServer.Start(&wg, s.Healthy)
@@ -54,18 +41,34 @@ func (s *JarlAuthzServer) Run() {
 	wg.Wait()
 }
 
-func (s *JarlAuthzServer) Healthy() bool {
-	return true
+// Healthy returns true if both servers are running
+func (s *JarlAuthzServer) Healthy() (bool, string) {
+	if s.grpcServer.state == Serving && s.httpServer.state == Serving {
+		return true, "healthy"
+	}
+
+	return false, fmt.Sprintf("grpc up: %t http up: %t", s.grpcServer.state == Serving, s.httpServer.state == Serving)
 }
 
+// Stop stops the underlying HTTP and GRPC servers
 func (s *JarlAuthzServer) Stop() {
 	s.grpcServer.Stop()
 	s.httpServer.Stop()
 }
 
-func NewJarlAuthzServer(httpListenAddr string, grpcListenAddr string) *JarlAuthzServer {
+// NewJarlAuthzServer instantiates a new Authz server based on the provided configuration
+func NewJarlAuthzServer(conf *config.Configuration) *JarlAuthzServer {
 	return &JarlAuthzServer{
-		grpcServer: NewGrpcAuthz(grpcListenAddr),
-		httpServer: NewHttpAuthz(httpListenAddr),
+		grpcServer: NewGRPCAuthzServer(conf),
+		httpServer: NewHTTPAuthzServer(conf),
 	}
+}
+
+func truncate(body string) string {
+	// Maximum size of a header accepted by Envoy is 60KiB, so when the request body is bigger than 60KB,
+	// we don't return it in a response header to avoid rejecting it by Envoy and returning 431 to the client
+	if len(body) > 60000 {
+		return "<truncated>"
+	}
+	return body
 }

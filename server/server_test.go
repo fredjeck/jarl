@@ -17,46 +17,113 @@ package server
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"os"
 	"testing"
 
 	authv2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	authv3 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+	"github.com/fredjeck/jarl/config"
+	"github.com/fredjeck/jarl/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+const checkHeader = "x-ext-authz"
+
+var cases = []struct {
+	name     string
+	isGRPCV3 bool
+	isGRPCV2 bool
+	header   string
+	want     int
+}{
+	{
+		name:   "HTTP-allow",
+		header: "allow",
+		want:   http.StatusOK,
+	},
+	{
+		name:   "HTTP-deny",
+		header: "deny",
+		want:   http.StatusForbidden,
+	},
+	{
+		name:     "GRPCv3-allow",
+		isGRPCV3: true,
+		header:   "allow",
+		want:     int(codes.OK),
+	},
+	{
+		name:     "GRPCv3-deny",
+		isGRPCV3: true,
+		header:   "deny",
+		want:     int(codes.PermissionDenied),
+	},
+	{
+		name:     "GRPCv2-allow",
+		isGRPCV2: true,
+		header:   "allow",
+		want:     int(codes.OK),
+	},
+	{
+		name:     "GRPCv2-deny",
+		isGRPCV2: true,
+		header:   "deny",
+		want:     int(codes.PermissionDenied),
+	},
+}
+
+func grpcV3Request(grpcV3Client authv3.AuthorizationClient, header string) (*authv3.CheckResponse, error) {
+	return grpcV3Client.Check(context.Background(), &authv3.CheckRequest{
+		Attributes: &authv3.AttributeContext{
+			Request: &authv3.AttributeContext_Request{
+				Http: &authv3.AttributeContext_HttpRequest{
+					Host:    "localhost",
+					Path:    "/check",
+					Headers: map[string]string{checkHeader: header},
+				},
+			},
+		},
+	})
+}
+
+func grpcV2Request(grpcV2Client authv2.AuthorizationClient, header string) (*authv2.CheckResponse, error) {
+	return grpcV2Client.Check(context.Background(), &authv2.CheckRequest{
+		Attributes: &authv2.AttributeContext{
+			Request: &authv2.AttributeContext_Request{
+				Http: &authv2.AttributeContext_HttpRequest{
+					Host:    "localhost",
+					Path:    "/check",
+					Headers: map[string]string{checkHeader: header},
+				},
+			},
+		},
+	})
+}
+
 func TestExtAuthz(t *testing.T) {
 
-	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}
+	logging.Setup()
 
-	var logger *slog.Logger
-	logger = slog.New(slog.NewTextHandler(os.Stdout, opts))
-
-	slog.SetDefault(logger)
-
-	server := NewJarlAuthzServer("localhost:0", "localhost:0")
+	server := NewJarlAuthzServer(&config.Configuration{
+		HTTPListenOn:    "localhost:0",
+		GRPCListenOn:    "localhost:0",
+		HTTPAuthZHeader: checkHeader,
+	})
 	// Start the test server on random port.
-	go server.Run()
+	go server.Start()
 
 	// Prepare the HTTP request.
-	httpClient := &http.Client{}
 	_ = <-server.httpServer.ready
-	//httpReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/check", <-server.httpPort), nil)
 	httpReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/check", server.httpServer.port), nil)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
 	// Prepare the gRPC request.
-
 	_ = <-server.grpcServer.ready
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", server.grpcServer.port), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(fmt.Sprintf("localhost:%d", server.grpcServer.port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -64,80 +131,23 @@ func TestExtAuthz(t *testing.T) {
 	grpcV3Client := authv3.NewAuthorizationClient(conn)
 	grpcV2Client := authv2.NewAuthorizationClient(conn)
 
-	cases := []struct {
-		name     string
-		isGRPCV3 bool
-		isGRPCV2 bool
-		header   string
-		want     int
-	}{
-		{
-			name:   "HTTP-allow",
-			header: "allow",
-			want:   http.StatusOK,
-		},
-		{
-			name:   "HTTP-deny",
-			header: "deny",
-			want:   http.StatusForbidden,
-		},
-		{
-			name:     "GRPCv3-allow",
-			isGRPCV3: true,
-			header:   "allow",
-			want:     int(codes.OK),
-		},
-		{
-			name:     "GRPCv3-deny",
-			isGRPCV3: true,
-			header:   "deny",
-			want:     int(codes.PermissionDenied),
-		},
-		{
-			name:     "GRPCv2-allow",
-			isGRPCV2: true,
-			header:   "allow",
-			want:     int(codes.OK),
-		},
-		{
-			name:     "GRPCv2-deny",
-			isGRPCV2: true,
-			header:   "deny",
-			want:     int(codes.PermissionDenied),
-		},
-	}
+	runTestCases(t, grpcV2Client, grpcV3Client, httpReq)
+}
+
+func runTestCases(t *testing.T, grpcV2Client authv2.AuthorizationClient, grpcV3Client authv3.AuthorizationClient, httpReq *http.Request) {
+	httpClient := &http.Client{}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var got int
 			if tc.isGRPCV3 {
-				resp, err := grpcV3Client.Check(context.Background(), &authv3.CheckRequest{
-					Attributes: &authv3.AttributeContext{
-						Request: &authv3.AttributeContext_Request{
-							Http: &authv3.AttributeContext_HttpRequest{
-								Host:    "localhost",
-								Path:    "/check",
-								Headers: map[string]string{checkHeader: tc.header},
-							},
-						},
-					},
-				})
+				resp, err := grpcV3Request(grpcV3Client, tc.header)
 				if err != nil {
 					t.Errorf(err.Error())
 				} else {
 					got = int(resp.Status.Code)
 				}
 			} else if tc.isGRPCV2 {
-				resp, err := grpcV2Client.Check(context.Background(), &authv2.CheckRequest{
-					Attributes: &authv2.AttributeContext{
-						Request: &authv2.AttributeContext_Request{
-							Http: &authv2.AttributeContext_HttpRequest{
-								Host:    "localhost",
-								Path:    "/check",
-								Headers: map[string]string{checkHeader: tc.header},
-							},
-						},
-					},
-				})
+				resp, err := grpcV2Request(grpcV2Client, tc.header)
 				if err != nil {
 					t.Errorf(err.Error())
 				} else {
