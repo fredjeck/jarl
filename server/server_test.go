@@ -31,6 +31,44 @@ import (
 
 const checkHeader = "x-ext-authz"
 
+const clientA = `
+clientID: clientA
+mode: allow
+paths:
+  - path: /pokemon/.*?
+    methods: GET, PUT
+`
+
+var testCases = []struct {
+	name     string
+	url      string
+	method   string
+	clientID string
+	want     int
+}{
+	{
+		name:     "Allow GET",
+		url:      "/pokemon/pikachu",
+		clientID: "clientA",
+		method:   http.MethodGet,
+		want:     int(codes.OK),
+	},
+	{
+		name:     "Deny DELETE",
+		url:      "/pokemon/pikachu",
+		clientID: "clientA",
+		method:   http.MethodDelete,
+		want:     int(codes.PermissionDenied),
+	},
+	{
+		name:     "Deny client",
+		url:      "/pokemon/pikachu",
+		clientID: "clientB",
+		method:   http.MethodGet,
+		want:     int(codes.PermissionDenied),
+	},
+}
+
 var cases = []struct {
 	name     string
 	isGRPCV3 bool
@@ -88,6 +126,36 @@ func grpcV3Request(grpcV3Client authv3.AuthorizationClient, header string) (*aut
 	})
 }
 
+func grpcV3PathRequest(grpcV3Client authv3.AuthorizationClient, clientID string, path string, method string) (*authv3.CheckResponse, error) {
+	return grpcV3Client.Check(context.Background(), &authv3.CheckRequest{
+		Attributes: &authv3.AttributeContext{
+			Request: &authv3.AttributeContext_Request{
+				Http: &authv3.AttributeContext_HttpRequest{
+					Host:    "localhost",
+					Path:    path,
+					Method:  method,
+					Headers: map[string]string{checkHeader: clientID},
+				},
+			},
+		},
+	})
+}
+
+func grpcV2PathRequest(grpcV2Client authv2.AuthorizationClient, clientID string, path string, method string) (*authv2.CheckResponse, error) {
+	return grpcV2Client.Check(context.Background(), &authv2.CheckRequest{
+		Attributes: &authv2.AttributeContext{
+			Request: &authv2.AttributeContext_Request{
+				Http: &authv2.AttributeContext_HttpRequest{
+					Host:    "localhost",
+					Path:    path,
+					Method:  method,
+					Headers: map[string]string{checkHeader: clientID},
+				},
+			},
+		},
+	})
+}
+
 func grpcV2Request(grpcV2Client authv2.AuthorizationClient, header string) (*authv2.CheckResponse, error) {
 	return grpcV2Client.Check(context.Background(), &authv2.CheckRequest{
 		Attributes: &authv2.AttributeContext{
@@ -106,10 +174,15 @@ func TestExtAuthz(t *testing.T) {
 
 	logging.Setup()
 
+	authz := make(map[string]*config.Authorization)
+	ca, err := config.NewAuthorizationFromYaml([]byte(clientA))
+	authz["clientA"] = ca
+
 	server := NewJarlAuthzServer(&config.Configuration{
 		HTTPListenOn:    "localhost:0",
 		GRPCListenOn:    "localhost:0",
 		HTTPAuthZHeader: checkHeader,
+		Authorizations:  authz,
 	})
 	// Start the test server on random port.
 	go server.Start()
@@ -131,7 +204,34 @@ func TestExtAuthz(t *testing.T) {
 	grpcV3Client := authv3.NewAuthorizationClient(conn)
 	grpcV2Client := authv2.NewAuthorizationClient(conn)
 
-	runTestCases(t, grpcV2Client, grpcV3Client, httpReq)
+	runExtendedTestCases(t, grpcV2Client, grpcV3Client, httpReq)
+}
+
+func runExtendedTestCases(t *testing.T, grpcV2Client authv2.AuthorizationClient, grpcV3Client authv3.AuthorizationClient, httpReq *http.Request) {
+	var got int
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := grpcV3PathRequest(grpcV3Client, tc.clientID, tc.url, tc.method)
+			if err != nil {
+				t.Errorf(err.Error())
+			} else {
+				got = int(resp.Status.Code)
+			}
+			if got != tc.want {
+				t.Errorf("'%s' want %d but got %d", tc.name, tc.want, got)
+			}
+
+			respv2, err := grpcV2PathRequest(grpcV2Client, tc.clientID, tc.url, tc.method)
+			if err != nil {
+				t.Errorf(err.Error())
+			} else {
+				got = int(respv2.Status.Code)
+			}
+			if got != tc.want {
+				t.Errorf("'%s' want %d but got %d", tc.name, tc.want, got)
+			}
+		})
+	}
 }
 
 func runTestCases(t *testing.T, grpcV2Client authv2.AuthorizationClient, grpcV3Client authv3.AuthorizationClient, httpReq *http.Request) {

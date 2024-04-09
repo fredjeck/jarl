@@ -3,12 +3,12 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 
 	corev2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	authv2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	typev2 "github.com/envoyproxy/go-control-plane/envoy/type"
 	"github.com/fredjeck/jarl/config"
+	"github.com/fredjeck/jarl/logging"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 )
@@ -19,15 +19,7 @@ type GRPCAuthzServerV2 struct {
 	Authorizations map[string]*config.Authorization
 }
 
-func (s *GRPCAuthzServerV2) logRequest(allow string, request *authv2.CheckRequest) {
-	httpAttrs := request.GetAttributes().GetRequest().GetHttp()
-	log.Printf("[gRPCv2][%s]: %s%s, attributes: %v\n", allow, httpAttrs.GetHost(),
-		httpAttrs.GetPath(),
-		request.GetAttributes())
-}
-
 func (s *GRPCAuthzServerV2) allow(request *authv2.CheckRequest) *authv2.CheckResponse {
-	s.logRequest("allowed", request)
 	return &authv2.CheckResponse{
 		HttpResponse: &authv2.CheckResponse_OkResponse{
 			OkResponse: &authv2.OkHttpResponse{
@@ -44,12 +36,6 @@ func (s *GRPCAuthzServerV2) allow(request *authv2.CheckRequest) *authv2.CheckRes
 							Value: request.GetAttributes().String(),
 						},
 					},
-					// {
-					// 	Header: &corev2.HeaderValue{
-					// 		Key:   overrideHeader,
-					// 		Value: overrideGRPCValue,
-					// 	},
-					// },
 				},
 			},
 		},
@@ -58,7 +44,6 @@ func (s *GRPCAuthzServerV2) allow(request *authv2.CheckRequest) *authv2.CheckRes
 }
 
 func (s *GRPCAuthzServerV2) deny(request *authv2.CheckRequest, reason string) *authv2.CheckResponse {
-	s.logRequest("denied", request)
 	return &authv2.CheckResponse{
 		HttpResponse: &authv2.CheckResponse_DeniedResponse{
 			DeniedResponse: &authv2.DeniedHttpResponse{
@@ -77,12 +62,6 @@ func (s *GRPCAuthzServerV2) deny(request *authv2.CheckRequest, reason string) *a
 							Value: request.GetAttributes().String(),
 						},
 					},
-					// {
-					// 	Header: &corev2.HeaderValue{
-					// 		Key:   overrideHeader,
-					// 		Value: overrideGRPCValue,
-					// 	},
-					// },
 				},
 			},
 		},
@@ -95,13 +74,29 @@ func (s *GRPCAuthzServerV2) Check(_ context.Context, request *authv2.CheckReques
 	attrs := request.GetAttributes()
 	method := config.HttpMethod(attrs.Request.Http.Method)
 	// Determine whether to allow or deny the request.
-	checkHeaderValue, contains := attrs.GetRequest().GetHttp().GetHeaders()[s.AuthzHeader]
-	if contains {
-		auth, ok := s.Authorizations[checkHeaderValue]
-		if !ok || !auth.IsAllowed(attrs.Request.Http.Path, method) {
-			return s.deny(request, fmt.Sprintf("%s is not authorized to access %s %s", checkHeaderValue, method, attrs.Request.Http.Path)), nil
+	clientID, headerExists := attrs.GetRequest().GetHttp().GetHeaders()[s.AuthzHeader]
+
+	reason := ""
+	allowed := true
+
+	if headerExists {
+		auth, authFound := s.Authorizations[clientID]
+		if !authFound || !auth.IsAllowed(attrs.Request.Http.Path, method) {
+			allowed = false
+			if !authFound {
+				reason = fmt.Sprintf("no authz configuration defined for %s", clientID)
+			} else {
+				reason = fmt.Sprintf("%s is not authorized to access %s %s", clientID, method, attrs.Request.Http.Path)
+			}
 		}
+	} else {
+		allowed = false
+		reason = fmt.Sprintf("missing authz configuration header %s", s.AuthzHeader)
+	}
+
+	logging.LogRequest(allowed, reason, logging.AuthV2LoggingContext(request))
+	if allowed {
 		return s.allow(request), nil
 	}
-	return s.deny(request, "missing authorization header"), nil
+	return s.deny(request, "missing authz header"), nil
 }
