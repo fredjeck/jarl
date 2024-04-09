@@ -74,7 +74,7 @@ func (s *GRPCAuthzServerV3) deny(request *authv3.CheckRequest, reason string) *a
 // Check implements gRPC v3 check request.
 func (s *GRPCAuthzServerV3) Check(_ context.Context, request *authv3.CheckRequest) (*authv3.CheckResponse, error) {
 	attrs := request.GetAttributes()
-	method := config.HttpMethod(attrs.Request.Http.Method)
+	method := config.HTTPMethod(attrs.Request.Http.Method)
 	// Determine whether to allow or deny the request.
 	clientID, headerExists := attrs.GetRequest().GetHttp().GetHeaders()[s.AuthzHeader]
 
@@ -96,7 +96,9 @@ func (s *GRPCAuthzServerV3) Check(_ context.Context, request *authv3.CheckReques
 		reason = fmt.Sprintf("missing authz configuration header %s", s.AuthzHeader)
 	}
 
-	logging.LogRequest(allowed, reason, logging.AuthV3LoggingContext(request))
+	ctx := logging.AuthV3LoggingContext(request)
+	ctx.ClientID = clientID
+	logging.LogRequest(allowed, reason, ctx)
 	if allowed {
 		return s.allow(request), nil
 	}

@@ -20,6 +20,7 @@ const (
 	KeyAllow    = "request.allow"     // KeyAllow is the logging key for the request outcome
 	KeyClientID = "request.client.id" // KeyClientID is the logging key for the header identifier value
 	KeyProtocol = "request.protocol"  // KeyProtocol is the logging key for the GRPC protocol version
+	KeyReason   = "reason"            // KeyReason is the logging key for the deny reason
 )
 
 // Setup configures the logging environment
@@ -44,6 +45,7 @@ type Context struct {
 	RequestContext interface{}
 }
 
+// AuthV3LoggingContext creates a logging context from an AuthV3 CheckRequest
 func AuthV3LoggingContext(request *authv3.CheckRequest) *Context {
 	httpAttrs := request.GetAttributes().GetRequest().GetHttp()
 	return &Context{
@@ -57,10 +59,11 @@ func AuthV3LoggingContext(request *authv3.CheckRequest) *Context {
 	}
 }
 
+// AuthV2LoggingContext creates a logging context from an AuthV2 CheckRequest
 func AuthV2LoggingContext(request *authv2.CheckRequest) *Context {
 	httpAttrs := request.GetAttributes().GetRequest().GetHttp()
 	return &Context{
-		Protocol:       "V3",
+		Protocol:       "V2",
 		Host:           httpAttrs.Host,
 		Path:           httpAttrs.Path,
 		Method:         httpAttrs.Method,
@@ -76,11 +79,11 @@ func LogRequest(allow bool, reason string, context *Context) {
 	msg := fmt.Sprintf("%s %s %s for '%s'", context.Method, context.Path, outcome, context.ClientID)
 	if !allow {
 		outcome = "denied"
-		msg = fmt.Sprintf("%s %s %s for '%s' (reason: %s)", context.Method, context.Path, outcome, context.ClientID, reason)
 	}
 
 	slog.Info(msg,
 		slog.Bool(KeyAllow, allow),
+		slog.String(KeyReason, reason),
 		slog.String(KeyHost, context.Host),
 		slog.String(KeyPath, context.Path),
 		slog.String(KeyMethod, context.Method),

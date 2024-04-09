@@ -12,6 +12,8 @@ import (
 )
 
 // HTTPAuthzServer implements an Envoy custom HTTP authorization filter
+// Please note that HTTP authorization server has been disabled - old code can be found in tag 0.0.1-alpha
+// HTTP Server is only kept for health check purposes
 type HTTPAuthzServer struct {
 	httpServer    *http.Server
 	configuration *config.Configuration
@@ -47,7 +49,6 @@ func (srv *HTTPAuthzServer) Start(wg *sync.WaitGroup, healthFunc func() (bool, s
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healtz", handleHealth(healthFunc))
-	mux.HandleFunc("/", handleCheck(srv.configuration.HTTPAuthZHeader, srv.configuration.Authorizations))
 
 	srv.httpServer = &http.Server{Handler: mux}
 	srv.ready <- true // for testing
@@ -78,40 +79,4 @@ func handleHealth(healthFunc func() (bool, string)) func(w http.ResponseWriter, 
 		}
 		response.Write([]byte(desc))
 	}
-}
-
-// Handles authorization requests
-func handleCheck(authzHeader string, authorization map[string]*config.Authorization) func(w http.ResponseWriter, r *http.Request) {
-	return func(response http.ResponseWriter, request *http.Request) {
-		// body, err := io.ReadAll(request.Body)
-		// if err != nil {
-		// 	log.Printf("[HTTP] read body failed: %v", err)
-		// }
-		// l := fmt.Sprintf("%s %s%s, headers: %v, body: [%s]\n", request.Method, request.Host, request.URL, request.Header, truncate(string(body)))
-
-		auth, ok := authorization[request.Header.Get(authzHeader)]
-		if !ok || !auth.IsAllowed(request.URL.String(), config.HttpMethod(request.Method)) {
-			deny(response)
-
-		} else {
-			allow(response)
-		}
-	}
-}
-
-func allow(response http.ResponseWriter) {
-	//log.Printf("[HTTP][allowed]: %s", l)
-	response.Header().Set(resultHeader, resultAllowed)
-	// response.Header().Set(overrideHeader, request.Header.Get(overrideHeader))
-	// response.Header().Set(receivedHeader, l)
-	response.WriteHeader(http.StatusOK)
-}
-
-func deny(response http.ResponseWriter) {
-	//log.Printf("[HTTP][allowed]: %s", l)
-	response.Header().Set(resultHeader, resultDenied)
-	// response.Header().Set(overrideHeader, request.Header.Get(overrideHeader))
-	// response.Header().Set(receivedHeader, l)
-	response.WriteHeader(http.StatusForbidden)
-	//_, _ = response.Write([]byte(denyBody))
 }

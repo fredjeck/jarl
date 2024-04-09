@@ -9,9 +9,9 @@ import (
 func TestAppendSinglePath(t *testing.T) {
 	auth := NewAuthorization()
 
-	auth.AppendPath("/Pokemon", "")
+	auth.ConfigurePath("/Pokemon", "")
 
-	endpoints, ok := auth.Endpoints[HttpMethodAll]
+	endpoints, ok := auth.Endpoints[HTTPMethodAll]
 	assert.True(t, ok)
 	assert.Len(t, endpoints, 1)
 }
@@ -19,11 +19,11 @@ func TestAppendSinglePath(t *testing.T) {
 func TestAppendMultiplePaths(t *testing.T) {
 	auth := NewAuthorization()
 
-	auth.AppendPath("/Pokemon", "")
-	auth.AppendPath("/Pokemon/Ditto", "")
-	auth.AppendPath("/Pokemon/Pikachu", "")
+	auth.ConfigurePath("/Pokemon", "")
+	auth.ConfigurePath("/Pokemon/Ditto", "")
+	auth.ConfigurePath("/Pokemon/Pikachu", "")
 
-	endpoints, ok := auth.Endpoints[HttpMethodAll]
+	endpoints, ok := auth.Endpoints[HTTPMethodAll]
 	assert.True(t, ok)
 	assert.Len(t, endpoints, 3)
 }
@@ -31,19 +31,19 @@ func TestAppendMultiplePaths(t *testing.T) {
 func TestAppendMultipleMethods(t *testing.T) {
 	auth := NewAuthorization()
 
-	auth.AppendPath("/Pokemon", "get, post")
-	auth.AppendPath("/Pokemon/Ditto", "get, post, options")
-	auth.AppendPath("/Pokemon/Pikachu", "post")
+	auth.ConfigurePath("/Pokemon", "get, post")
+	auth.ConfigurePath("/Pokemon/Ditto", "get, post, options")
+	auth.ConfigurePath("/Pokemon/Pikachu", "post")
 
-	endpoints, ok := auth.Endpoints[HttpMethodGet]
+	endpoints, ok := auth.Endpoints[HTTPMethodGet]
 	assert.True(t, ok)
 	assert.Len(t, endpoints, 2)
 
-	endpoints, ok = auth.Endpoints[HttpMethodPost]
+	endpoints, ok = auth.Endpoints[HTTPMethodPost]
 	assert.True(t, ok)
 	assert.Len(t, endpoints, 3)
 
-	endpoints, ok = auth.Endpoints[HttpMethodOptions]
+	endpoints, ok = auth.Endpoints[HTTPMethodOptions]
 	assert.True(t, ok)
 	assert.Len(t, endpoints, 1)
 }
@@ -51,8 +51,8 @@ func TestAppendMultipleMethods(t *testing.T) {
 func TestAppendInvalidMethods(t *testing.T) {
 	auth := NewAuthorization()
 
-	auth.AppendPath("/Pokemon", "notknown, notvalid")
-	auth.AppendPath("/Pokemon/Ditto", "woopsie")
+	auth.ConfigurePath("/Pokemon", "notknown, notvalid")
+	auth.ConfigurePath("/Pokemon/Ditto", "woopsie")
 
 	assert.Len(t, auth.Endpoints, 0)
 }
@@ -60,8 +60,8 @@ func TestAppendInvalidMethods(t *testing.T) {
 func TestAppendInvalidEnpoints(t *testing.T) {
 	auth := NewAuthorization()
 
-	auth.AppendPath("[\\]", "get")
-	auth.AppendPath("[ab", "put")
+	auth.ConfigurePath("[\\]", "get")
+	auth.ConfigurePath("[ab", "put")
 
 	assert.Len(t, auth.Endpoints, 0)
 }
@@ -86,19 +86,19 @@ paths:
 	auth, err := NewAuthorizationFromYaml([]byte(yml))
 	assert.NoError(t, err)
 
-	endpoints, ok := auth.Endpoints[HttpMethodGet]
+	endpoints, ok := auth.Endpoints[HTTPMethodGet]
 	assert.True(t, ok)
 	assert.Len(t, endpoints, 1)
 
-	endpoints, ok = auth.Endpoints[HttpMethodPost]
+	endpoints, ok = auth.Endpoints[HTTPMethodPost]
 	assert.True(t, ok)
 	assert.Len(t, endpoints, 3)
 
-	endpoints, ok = auth.Endpoints[HttpMethodDelete]
+	endpoints, ok = auth.Endpoints[HTTPMethodDelete]
 	assert.True(t, ok)
 	assert.Len(t, endpoints, 1)
 
-	endpoints, ok = auth.Endpoints[HttpMethodAll]
+	endpoints, ok = auth.Endpoints[HTTPMethodAll]
 	assert.True(t, ok)
 	assert.Len(t, endpoints, 2)
 
@@ -216,10 +216,10 @@ paths:
 
 	auth, err := NewAuthorizationFromYaml([]byte(yml))
 	assert.NoError(t, err)
-	assert.True(t, auth.IsAllowed("/api/pokemon/ditto", HttpMethodGet))
-	assert.False(t, auth.IsAllowed("/api/encounter", HttpMethodGet))
-	assert.True(t, auth.IsAllowed("/api/encounter", HttpMethodPut))
-	assert.True(t, auth.IsAllowed("/api/pokemon/pikachu", HttpMethodPut))
+	assert.True(t, auth.IsAllowed("/api/pokemon/ditto", HTTPMethodGet))
+	assert.False(t, auth.IsAllowed("/api/encounter", HTTPMethodGet))
+	assert.True(t, auth.IsAllowed("/api/encounter", HTTPMethodPut))
+	assert.True(t, auth.IsAllowed("/api/pokemon/pikachu", HTTPMethodPut))
 }
 
 func TestPathIsDisallowed(t *testing.T) {
@@ -234,13 +234,13 @@ paths:
 
 	auth, err := NewAuthorizationFromYaml([]byte(yml))
 	assert.NoError(t, err)
-	assert.True(t, auth.IsAllowed("/api/pokemon/ditto", HttpMethodGet))
-	assert.False(t, auth.IsAllowed("/api/encounter", HttpMethodPut))
-	assert.True(t, auth.IsAllowed("/api/encounter", HttpMethodGet))
-	assert.False(t, auth.IsAllowed("/api/pokemon/pikachu", HttpMethodPut))
+	assert.True(t, auth.IsAllowed("/api/pokemon/ditto", HTTPMethodGet))
+	assert.False(t, auth.IsAllowed("/api/encounter", HTTPMethodPut))
+	assert.True(t, auth.IsAllowed("/api/encounter", HTTPMethodGet))
+	assert.False(t, auth.IsAllowed("/api/pokemon/pikachu", HTTPMethodPut))
 }
 
-func TestHttpMethodParsing(t *testing.T) {
+func TestHTTPMethodParsing(t *testing.T) {
 	yml := `
 clientID: client
 mode: allow
@@ -254,7 +254,7 @@ paths:
 	assert.Len(t, auth.Endpoints, 9)
 }
 
-func TestHttpMethodOptimization(t *testing.T) {
+func TestHTTPMethodOptimization(t *testing.T) {
 	yml := `
 clientID: client
 mode: allow

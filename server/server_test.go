@@ -39,13 +39,22 @@ paths:
     methods: GET, PUT
 `
 
-var testCases = []struct {
+const clientB = `
+clientID: clientB
+mode: deny
+paths:
+  - path: /pokemon/.*?
+`
+
+type testCase struct {
 	name     string
 	url      string
 	method   string
 	clientID string
 	want     int
-}{
+}
+
+var testCases = []testCase{
 	{
 		name:     "Allow GET",
 		url:      "/pokemon/pikachu",
@@ -54,120 +63,47 @@ var testCases = []struct {
 		want:     int(codes.OK),
 	},
 	{
+		name:     "Allow PUT",
+		url:      "/pokemon/tortank",
+		clientID: "clientA",
+		method:   http.MethodPut,
+		want:     int(codes.OK),
+	},
+	{
 		name:     "Deny DELETE",
-		url:      "/pokemon/pikachu",
+		url:      "/pokemon/ditto",
 		clientID: "clientA",
 		method:   http.MethodDelete,
 		want:     int(codes.PermissionDenied),
 	},
 	{
-		name:     "Deny client",
+		name:     "Deny URL",
+		url:      "/berries",
+		clientID: "clientA",
+		method:   http.MethodDelete,
+		want:     int(codes.PermissionDenied),
+	},
+	{
+		name:     "Deny URL",
 		url:      "/pokemon/pikachu",
 		clientID: "clientB",
 		method:   http.MethodGet,
 		want:     int(codes.PermissionDenied),
 	},
-}
-
-var cases = []struct {
-	name     string
-	isGRPCV3 bool
-	isGRPCV2 bool
-	header   string
-	want     int
-}{
 	{
-		name:   "HTTP-allow",
-		header: "allow",
-		want:   http.StatusOK,
-	},
-	{
-		name:   "HTTP-deny",
-		header: "deny",
-		want:   http.StatusForbidden,
-	},
-	{
-		name:     "GRPCv3-allow",
-		isGRPCV3: true,
-		header:   "allow",
+		name:     "Allow URL",
+		url:      "/encounters",
+		clientID: "clientB",
+		method:   http.MethodGet,
 		want:     int(codes.OK),
 	},
 	{
-		name:     "GRPCv3-deny",
-		isGRPCV3: true,
-		header:   "deny",
+		name:     "Deny Client",
+		url:      "/gyms",
+		clientID: "clientC",
+		method:   http.MethodGet,
 		want:     int(codes.PermissionDenied),
 	},
-	{
-		name:     "GRPCv2-allow",
-		isGRPCV2: true,
-		header:   "allow",
-		want:     int(codes.OK),
-	},
-	{
-		name:     "GRPCv2-deny",
-		isGRPCV2: true,
-		header:   "deny",
-		want:     int(codes.PermissionDenied),
-	},
-}
-
-func grpcV3Request(grpcV3Client authv3.AuthorizationClient, header string) (*authv3.CheckResponse, error) {
-	return grpcV3Client.Check(context.Background(), &authv3.CheckRequest{
-		Attributes: &authv3.AttributeContext{
-			Request: &authv3.AttributeContext_Request{
-				Http: &authv3.AttributeContext_HttpRequest{
-					Host:    "localhost",
-					Path:    "/check",
-					Headers: map[string]string{checkHeader: header},
-				},
-			},
-		},
-	})
-}
-
-func grpcV3PathRequest(grpcV3Client authv3.AuthorizationClient, clientID string, path string, method string) (*authv3.CheckResponse, error) {
-	return grpcV3Client.Check(context.Background(), &authv3.CheckRequest{
-		Attributes: &authv3.AttributeContext{
-			Request: &authv3.AttributeContext_Request{
-				Http: &authv3.AttributeContext_HttpRequest{
-					Host:    "localhost",
-					Path:    path,
-					Method:  method,
-					Headers: map[string]string{checkHeader: clientID},
-				},
-			},
-		},
-	})
-}
-
-func grpcV2PathRequest(grpcV2Client authv2.AuthorizationClient, clientID string, path string, method string) (*authv2.CheckResponse, error) {
-	return grpcV2Client.Check(context.Background(), &authv2.CheckRequest{
-		Attributes: &authv2.AttributeContext{
-			Request: &authv2.AttributeContext_Request{
-				Http: &authv2.AttributeContext_HttpRequest{
-					Host:    "localhost",
-					Path:    path,
-					Method:  method,
-					Headers: map[string]string{checkHeader: clientID},
-				},
-			},
-		},
-	})
-}
-
-func grpcV2Request(grpcV2Client authv2.AuthorizationClient, header string) (*authv2.CheckResponse, error) {
-	return grpcV2Client.Check(context.Background(), &authv2.CheckRequest{
-		Attributes: &authv2.AttributeContext{
-			Request: &authv2.AttributeContext_Request{
-				Http: &authv2.AttributeContext_HttpRequest{
-					Host:    "localhost",
-					Path:    "/check",
-					Headers: map[string]string{checkHeader: header},
-				},
-			},
-		},
-	})
 }
 
 func TestExtAuthz(t *testing.T) {
@@ -175,8 +111,10 @@ func TestExtAuthz(t *testing.T) {
 	logging.Setup()
 
 	authz := make(map[string]*config.Authorization)
-	ca, err := config.NewAuthorizationFromYaml([]byte(clientA))
-	authz["clientA"] = ca
+	client, err := config.NewAuthorizationFromYaml([]byte(clientA))
+	authz[client.ClientID] = client
+	client, err = config.NewAuthorizationFromYaml([]byte(clientB))
+	authz[client.ClientID] = client
 
 	server := NewJarlAuthzServer(&config.Configuration{
 		HTTPListenOn:    "localhost:0",
@@ -187,12 +125,8 @@ func TestExtAuthz(t *testing.T) {
 	// Start the test server on random port.
 	go server.Start()
 
-	// Prepare the HTTP request.
+	// Wait until HTTP Server is ready
 	_ = <-server.httpServer.ready
-	httpReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/check", server.httpServer.port), nil)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
 
 	// Prepare the gRPC request.
 	_ = <-server.grpcServer.ready
@@ -204,68 +138,62 @@ func TestExtAuthz(t *testing.T) {
 	grpcV3Client := authv3.NewAuthorizationClient(conn)
 	grpcV2Client := authv2.NewAuthorizationClient(conn)
 
-	runExtendedTestCases(t, grpcV2Client, grpcV3Client, httpReq)
+	runTestCases(t, grpcV2Client, grpcV3Client)
 }
 
-func runExtendedTestCases(t *testing.T, grpcV2Client authv2.AuthorizationClient, grpcV3Client authv3.AuthorizationClient, httpReq *http.Request) {
-	var got int
+func runTestCases(t *testing.T, grpcV2Client authv2.AuthorizationClient, grpcV3Client authv3.AuthorizationClient) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, err := grpcV3PathRequest(grpcV3Client, tc.clientID, tc.url, tc.method)
-			if err != nil {
-				t.Errorf(err.Error())
-			} else {
-				got = int(resp.Status.Code)
-			}
-			if got != tc.want {
-				t.Errorf("'%s' want %d but got %d", tc.name, tc.want, got)
-			}
-
-			respv2, err := grpcV2PathRequest(grpcV2Client, tc.clientID, tc.url, tc.method)
-			if err != nil {
-				t.Errorf(err.Error())
-			} else {
-				got = int(respv2.Status.Code)
-			}
-			if got != tc.want {
-				t.Errorf("'%s' want %d but got %d", tc.name, tc.want, got)
-			}
+			runGrpcV2Request(t, tc, grpcV2Client)
+			runGrpcV3Request(t, tc, grpcV3Client)
 		})
 	}
 }
 
-func runTestCases(t *testing.T, grpcV2Client authv2.AuthorizationClient, grpcV3Client authv3.AuthorizationClient, httpReq *http.Request) {
-	httpClient := &http.Client{}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var got int
-			if tc.isGRPCV3 {
-				resp, err := grpcV3Request(grpcV3Client, tc.header)
-				if err != nil {
-					t.Errorf(err.Error())
-				} else {
-					got = int(resp.Status.Code)
-				}
-			} else if tc.isGRPCV2 {
-				resp, err := grpcV2Request(grpcV2Client, tc.header)
-				if err != nil {
-					t.Errorf(err.Error())
-				} else {
-					got = int(resp.Status.Code)
-				}
-			} else {
-				httpReq.Header.Set(checkHeader, tc.header)
-				resp, err := httpClient.Do(httpReq)
-				if err != nil {
-					t.Errorf(err.Error())
-				} else {
-					got = resp.StatusCode
-					resp.Body.Close()
-				}
-			}
-			if got != tc.want {
-				t.Errorf("want %d but got %d", tc.want, got)
-			}
-		})
+func runGrpcV3Request(t *testing.T, tc testCase, grpcV3Client authv3.AuthorizationClient) {
+	resp, err := grpcV3Client.Check(context.Background(), &authv3.CheckRequest{
+		Attributes: &authv3.AttributeContext{
+			Request: &authv3.AttributeContext_Request{
+				Http: &authv3.AttributeContext_HttpRequest{
+					Host:    "localhost",
+					Path:    tc.url,
+					Method:  tc.method,
+					Headers: map[string]string{checkHeader: tc.clientID},
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		t.Errorf(err.Error())
 	}
+
+	if int(resp.Status.Code) != tc.want {
+		t.Errorf("'%s' want %d but got %d", tc.name, tc.want, int(resp.Status.Code))
+	}
+	return
+}
+
+func runGrpcV2Request(t *testing.T, tc testCase, grpcV2Client authv2.AuthorizationClient) {
+	resp, err := grpcV2Client.Check(context.Background(), &authv2.CheckRequest{
+		Attributes: &authv2.AttributeContext{
+			Request: &authv2.AttributeContext_Request{
+				Http: &authv2.AttributeContext_HttpRequest{
+					Host:    "localhost",
+					Path:    tc.url,
+					Method:  tc.method,
+					Headers: map[string]string{checkHeader: tc.clientID},
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	if int(resp.Status.Code) != tc.want {
+		t.Errorf("'%s' want %d but got %d", tc.name, tc.want, int(resp.Status.Code))
+	}
+	return
 }

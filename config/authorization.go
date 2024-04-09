@@ -12,48 +12,50 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type HttpMethod string
+// HTTPMethod is a wrapper aroun http.Method
+type HTTPMethod string
 
 var (
-	HttpMethodGet     HttpMethod = "GET"
-	HttpMethodHead    HttpMethod = "HEAD"
-	HttpMethodPost    HttpMethod = "POST"
-	HttpMethodPut     HttpMethod = "PUT"
-	HttpMethodDelete  HttpMethod = "DELETE"
-	HttpMethodConnect HttpMethod = "CONNECT"
-	HttpMethodOptions HttpMethod = "OPTIONS"
-	HttpMethodTrace   HttpMethod = "TRACE"
-	HttpMethodPatch   HttpMethod = "PATCH"
-	HttpMethodAll     HttpMethod = "ALL"
-	HttpMethodUnknown HttpMethod = "UNKNOWN"
+	HTTPMethodGet     HTTPMethod = "GET"     // HTTPMethodGet HTTP GET
+	HTTPMethodHead    HTTPMethod = "HEAD"    // HTTPMethodHead HTTP HEAD
+	HTTPMethodPost    HTTPMethod = "POST"    // HTTPMethodPost HTTP POST
+	HTTPMethodPut     HTTPMethod = "PUT"     // HTTPMethodPut HTTP PUT
+	HTTPMethodDelete  HTTPMethod = "DELETE"  // HTTPMethodDelete HTTP DELETE
+	HTTPMethodConnect HTTPMethod = "CONNECT" // HTTPMethodConnect HTTP CONNECT
+	HTTPMethodOptions HTTPMethod = "OPTIONS" // HTTPMethodOptions HTTP OPTIONS
+	HTTPMethodTrace   HTTPMethod = "TRACE"   // HTTPMethodTrace HTTP TRACE
+	HTTPMethodPatch   HTTPMethod = "PATCH"   // HTTPMethodPatch HTTP PATCH
+	HTTPMethodAll     HTTPMethod = "ALL"     // HTTPMethodAll HTTP All
+	HTTPMethodUnknown HTTPMethod = "UNKNOWN" // HTTPMethodUnknown when parsing fails
 )
 
-func ParseHttpMethod(method string) HttpMethod {
+// ParseHTTPMethod translates the provided string to an HTTPMethod and makes sure the method is supported
+func ParseHTTPMethod(method string) HTTPMethod {
 	switch strings.ToUpper(strings.TrimSpace(method)) {
 	case "GET":
-		return HttpMethodGet
+		return HTTPMethodGet
 	case "HEAD":
-		return HttpMethodHead
+		return HTTPMethodHead
 	case "POST":
-		return HttpMethodPost
+		return HTTPMethodPost
 	case "PUT":
-		return HttpMethodPut
+		return HTTPMethodPut
 	case "DELETE":
-		return HttpMethodDelete
+		return HTTPMethodDelete
 	case "CONNECT":
-		return HttpMethodConnect
+		return HTTPMethodConnect
 	case "OPTIONS":
-		return HttpMethodOptions
+		return HTTPMethodOptions
 	case "TRACE":
-		return HttpMethodTrace
+		return HTTPMethodTrace
 	case "PATCH":
-		return HttpMethodPatch
+		return HTTPMethodPatch
 	case "ALL":
-		return HttpMethodAll
+		return HTTPMethodAll
 	case "UNKNOWN":
-		return HttpMethodUnknown
+		return HTTPMethodUnknown
 	default:
-		return HttpMethodUnknown
+		return HTTPMethodUnknown
 	}
 }
 
@@ -66,12 +68,13 @@ const (
 type Authorization struct {
 	ClientID  string
 	Allow     bool
-	Endpoints map[HttpMethod][]*regexp.Regexp
+	Endpoints map[HTTPMethod][]*regexp.Regexp
 }
 
+// NewAuthorization creates a new authorization
 func NewAuthorization() *Authorization {
 	return &Authorization{
-		Endpoints: make(map[HttpMethod][]*regexp.Regexp),
+		Endpoints: make(map[HTTPMethod][]*regexp.Regexp),
 	}
 }
 
@@ -82,6 +85,7 @@ var (
 	ErrInvalidMode = errors.New("mode is mandatory and should either be 'allow' or 'reject'")
 )
 
+// NewAuthorizationFromYaml Geneates a new authorization configration from the provided yaml content
 func NewAuthorizationFromYaml(contents []byte) (*Authorization, error) {
 	auth := NewAuthorization()
 
@@ -113,7 +117,7 @@ func NewAuthorizationFromYaml(contents []byte) (*Authorization, error) {
 		for _, v := range paths.([]interface{}) {
 			switch v.(type) {
 			case string:
-				if err := auth.AppendPath(v.(string), ""); err != nil {
+				if err := auth.ConfigurePath(v.(string), ""); err != nil {
 					slog.Warn("incompatible path detected", slog.Any("error", err))
 					continue
 				}
@@ -132,7 +136,7 @@ func NewAuthorizationFromYaml(contents []byte) (*Authorization, error) {
 					methods = m.(string)
 				}
 
-				if err := auth.AppendPath(path, methods); err != nil {
+				if err := auth.ConfigurePath(path, methods); err != nil {
 					slog.Warn("incompatible path detected", slog.Any("error", err))
 					continue
 				}
@@ -155,8 +159,8 @@ func NewAuthorizationFromYaml(contents []byte) (*Authorization, error) {
 	return auth, nil
 }
 
-// IsPathAuthorized returns true if the provided path access should be granted
-func (auth *Authorization) IsAllowed(path string, method HttpMethod) bool {
+// IsAllowed returns true if the provided path access should be granted
+func (auth *Authorization) IsAllowed(path string, method HTTPMethod) bool {
 
 	endpoints, ok := auth.Endpoints[method]
 	if ok {
@@ -167,7 +171,7 @@ func (auth *Authorization) IsAllowed(path string, method HttpMethod) bool {
 		}
 	}
 
-	endpoints, ok = auth.Endpoints[HttpMethodAll]
+	endpoints, ok = auth.Endpoints[HTTPMethodAll]
 	if !ok {
 		return !auth.Allow
 	}
@@ -180,17 +184,18 @@ func (auth *Authorization) IsAllowed(path string, method HttpMethod) bool {
 	return !auth.Allow
 }
 
-func (auth *Authorization) AppendPath(path string, methods string) error {
-	supportedMethods := make([]HttpMethod, 0)
+// ConfigurePath configures the provided path for the given methods
+func (auth *Authorization) ConfigurePath(path string, methods string) error {
+	supportedMethods := make([]HTTPMethod, 0)
 	lowercased := strings.ToLower(methods)
 
 	if len(methods) == 0 || strings.Contains(lowercased, "all") {
 		// If the user specifies all, we avoid injecting other method types
-		supportedMethods = append(supportedMethods, HttpMethodAll)
+		supportedMethods = append(supportedMethods, HTTPMethodAll)
 	} else {
 		for _, m := range strings.Split(lowercased, ",") {
-			method := ParseHttpMethod(m)
-			if method == HttpMethodUnknown {
+			method := ParseHTTPMethod(m)
+			if method == HTTPMethodUnknown {
 				slog.Warn(fmt.Sprintf("http method '%s' is not a supported method and will be ignored for clientID '%s'", method, auth.ClientID))
 				continue
 			}
@@ -213,6 +218,7 @@ func (auth *Authorization) AppendPath(path string, methods string) error {
 	return nil
 }
 
+// LoadAllAuthorizations loads all the client authorization yaml files from the provided directory
 func LoadAllAuthorizations(dir string) (map[string]*Authorization, error) {
 
 	fileInfo, err := os.Stat(dir)
