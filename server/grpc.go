@@ -8,7 +8,6 @@ import (
 
 	authv2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	authv3 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
-	"github.com/fredjeck/jarl/config"
 	"github.com/fredjeck/jarl/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -18,7 +17,7 @@ import (
 // GRPCAuthzServer implements an Envoy custom GRPC V2 and V3 authorization filter
 type GRPCAuthzServer struct {
 	grpcServer    *grpc.Server
-	configuration *config.Configuration
+	configuration *Configuration
 	port          int
 	ready         chan bool
 	state         ServingStatus
@@ -27,7 +26,7 @@ type GRPCAuthzServer struct {
 }
 
 // NewGRPCAuthzServer instantiates a new GRPC AuthZ serer but does not start it
-func NewGRPCAuthzServer(configuration *config.Configuration) *GRPCAuthzServer {
+func NewGRPCAuthzServer(configuration *Configuration) *GRPCAuthzServer {
 	return &GRPCAuthzServer{
 		configuration: configuration,
 		ready:         make(chan bool),

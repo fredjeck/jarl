@@ -4,8 +4,6 @@ package server
 import (
 	"fmt"
 	"sync"
-
-	"github.com/fredjeck/jarl/config"
 )
 
 const (
@@ -57,7 +55,7 @@ func (s *JarlAuthzServer) Stop() {
 }
 
 // NewJarlAuthzServer instantiates a new Authz server based on the provided configuration
-func NewJarlAuthzServer(conf *config.Configuration) *JarlAuthzServer {
+func NewJarlAuthzServer(conf *Configuration) *JarlAuthzServer {
 	return &JarlAuthzServer{
 		grpcServer: NewGRPCAuthzServer(conf),
 		httpServer: NewHTTPAuthzServer(conf),

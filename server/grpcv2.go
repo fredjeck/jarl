@@ -7,7 +7,7 @@ import (
 	corev2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	authv2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	typev2 "github.com/envoyproxy/go-control-plane/envoy/type"
-	"github.com/fredjeck/jarl/config"
+	"github.com/fredjeck/jarl/authz"
 	"github.com/fredjeck/jarl/logging"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -16,7 +16,7 @@ import (
 // GRPCAuthzServerV2 implements Envoy custom GRPC V3 authorization filter
 type GRPCAuthzServerV2 struct {
 	AuthzHeader    string
-	Authorizations map[string]*config.Authorization
+	Authorizations *authz.Authorizations
 }
 
 func (s *GRPCAuthzServerV2) allow(request *authv2.CheckRequest) *authv2.CheckResponse {
@@ -72,7 +72,7 @@ func (s *GRPCAuthzServerV2) deny(request *authv2.CheckRequest, reason string) *a
 // Check implements gRPC v2 check request.
 func (s *GRPCAuthzServerV2) Check(_ context.Context, request *authv2.CheckRequest) (*authv2.CheckResponse, error) {
 	attrs := request.GetAttributes()
-	method := config.HTTPMethod(attrs.Request.Http.Method)
+	method := authz.HTTPMethod(attrs.Request.Http.Method)
 	// Determine whether to allow or deny the request.
 	clientID, headerExists := attrs.GetRequest().GetHttp().GetHeaders()[s.AuthzHeader]
 
@@ -80,15 +80,11 @@ func (s *GRPCAuthzServerV2) Check(_ context.Context, request *authv2.CheckReques
 	allowed := true
 
 	if headerExists {
-		auth, authFound := s.Authorizations[clientID]
-		if !authFound || !auth.IsAllowed(attrs.Request.Http.Path, method) {
-			allowed = false
-			if !authFound {
-				reason = fmt.Sprintf("no authz configuration defined for %s", clientID)
-			} else {
-				reason = fmt.Sprintf("%s is not authorized to access %s %s", clientID, method, attrs.Request.Http.Path)
-			}
+		al, err := s.Authorizations.IsAllowed(clientID, attrs.Request.Http.Path, method)
+		if err != nil {
+			reason = err.Error()
 		}
+		allowed = al
 	} else {
 		allowed = false
 		reason = fmt.Sprintf("missing authz configuration header %s", s.AuthzHeader)

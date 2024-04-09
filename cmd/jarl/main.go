@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package main is the main Jarl executable content
 package main
 
 import (
@@ -22,7 +23,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/fredjeck/jarl/config"
+	"github.com/fredjeck/jarl/authz"
 	"github.com/fredjeck/jarl/logging"
 	"github.com/fredjeck/jarl/server"
 )
@@ -40,14 +41,14 @@ func main() {
 
 	flag.Parse()
 
-	conf := &config.Configuration{
+	conf := &server.Configuration{
 		HTTPListenOn:             fmt.Sprintf(":%s", *httpPort),
 		GRPCListenOn:             fmt.Sprintf(":%s", *grpcPort),
 		HTTPAuthZHeader:          *header,
 		ClientsConfigurationPath: *configuration,
 	}
 
-	auths, err := config.LoadAllAuthorizations(*configuration)
+	auths, err := authz.LoadAll(*configuration)
 	if err != nil {
 		slog.Error(fmt.Sprintf("unable to load client configurations from '%s'", *configuration), slog.Any("error", logging.KeyError))
 		os.Exit(1)

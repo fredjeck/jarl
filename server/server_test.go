@@ -22,7 +22,7 @@ import (
 
 	authv2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	authv3 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
-	"github.com/fredjeck/jarl/config"
+	"github.com/fredjeck/jarl/authz"
 	"github.com/fredjeck/jarl/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -110,17 +110,17 @@ func TestExtAuthz(t *testing.T) {
 
 	logging.Setup()
 
-	authz := make(map[string]*config.Authorization)
-	client, err := config.NewAuthorizationFromYaml([]byte(clientA))
-	authz[client.ClientID] = client
-	client, err = config.NewAuthorizationFromYaml([]byte(clientB))
-	authz[client.ClientID] = client
+	a := authz.NewAuthorizations()
+	client, err := authz.NewAuthorizationFromYaml([]byte(clientA))
+	a.Add(client)
+	client, err = authz.NewAuthorizationFromYaml([]byte(clientB))
+	a.Add(client)
 
-	server := NewJarlAuthzServer(&config.Configuration{
+	server := NewJarlAuthzServer(&Configuration{
 		HTTPListenOn:    "localhost:0",
 		GRPCListenOn:    "localhost:0",
 		HTTPAuthZHeader: checkHeader,
-		Authorizations:  authz,
+		Authorizations:  a,
 	})
 	// Start the test server on random port.
 	go server.Start()

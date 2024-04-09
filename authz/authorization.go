@@ -1,11 +1,9 @@
-package config
+package authz
 
 import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -216,47 +214,4 @@ func (auth *Authorization) ConfigurePath(path string, methods string) error {
 		auth.Endpoints[method] = append(endpoints, rx)
 	}
 	return nil
-}
-
-// LoadAllAuthorizations loads all the client authorization yaml files from the provided directory
-func LoadAllAuthorizations(dir string) (map[string]*Authorization, error) {
-
-	fileInfo, err := os.Stat(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	if !fileInfo.IsDir() {
-		return nil, fmt.Errorf("'%s' is not a directory", dir)
-	}
-
-	authz := make(map[string]*Authorization)
-
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Check if the file is a regular file and has a YAML extension
-		if !info.IsDir() && (strings.HasSuffix(info.Name(), ".yaml") || strings.HasSuffix(info.Name(), ".yml")) {
-			content, err := os.ReadFile(path)
-			if err != nil {
-				fmt.Println("Error:", err)
-
-			}
-			conf, err := NewAuthorizationFromYaml(content)
-			if err != nil {
-				slog.Error(fmt.Sprintf("unable to load '%s' see details for errors", path), slog.Any("error", err))
-			}
-			authz[conf.ClientID] = conf
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		slog.Error(fmt.Sprintf("an error occured while load authorization files from '%s' see details for errors", dir), slog.Any("error", err))
-	}
-
-	return authz, nil
 }

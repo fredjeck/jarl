@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/fredjeck/jarl/config"
 	"github.com/fredjeck/jarl/logging"
 )
 
@@ -16,14 +15,14 @@ import (
 // HTTP Server is only kept for health check purposes
 type HTTPAuthzServer struct {
 	httpServer    *http.Server
-	configuration *config.Configuration
+	configuration *Configuration
 	port          int
 	ready         chan bool
 	state         ServingStatus
 }
 
 // NewHTTPAuthzServer instantiates a new HTTPAuthzServer but does not start it
-func NewHTTPAuthzServer(configuration *config.Configuration) *HTTPAuthzServer {
+func NewHTTPAuthzServer(configuration *Configuration) *HTTPAuthzServer {
 	return &HTTPAuthzServer{
 		ready:         make(chan bool),
 		state:         Stopped,

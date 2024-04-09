@@ -1,4 +1,4 @@
-package config
+package authz
 
 import (
 	"testing"
