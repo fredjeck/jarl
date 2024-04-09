@@ -33,6 +33,11 @@ func (a *Authorizations) Add(auth *Authorization) error {
 
 // IsAllowed ensures the provided clientID is configured for accessing the provided path with the given method
 func (a *Authorizations) IsAllowed(clientID string, path string, method HTTPMethod) (bool, error) {
+
+	if len(a.authorizations) == 0 {
+		return true, nil // No configuration found we allow a passthrough
+	}
+
 	reason := ""
 	allowed := true
 
@@ -90,6 +95,10 @@ func LoadAll(dir string) (*Authorizations, error) {
 
 	if err != nil {
 		slog.Error(fmt.Sprintf("an error occured while load authorization files from '%s' see details for errors", dir), slog.Any("error", err))
+	}
+
+	if len(authz.authorizations) == 0 {
+		slog.Warn(fmt.Sprintf("no configuration files could be loaded from '%s' jar will accept all requests", dir))
 	}
 
 	return authz, nil

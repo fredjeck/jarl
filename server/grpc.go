@@ -54,7 +54,13 @@ func (srv *GRPCAuthzServer) Start(wg *sync.WaitGroup) {
 	authv2.RegisterAuthorizationServer(srv.grpcServer, &GRPCAuthzServerV2{AuthzHeader: srv.configuration.HTTPAuthZHeader, Authorizations: srv.configuration.Authorizations})
 	authv3.RegisterAuthorizationServer(srv.grpcServer, &GRPCAuthzServerV3{AuthzHeader: srv.configuration.HTTPAuthZHeader, Authorizations: srv.configuration.Authorizations})
 	grpc_health_v1.RegisterHealthServer(srv.grpcServer, health.NewServer())
-	srv.ready <- true
+
+	select {
+	case srv.ready <- true:
+		fmt.Println("Notified test cases")
+	default:
+		fmt.Println("No test cases running")
+	}
 	srv.state = Serving
 
 	slog.Info(fmt.Sprintf("starting jarl GRPC authz server at '%s", listener.Addr()))

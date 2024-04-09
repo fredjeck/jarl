@@ -29,10 +29,10 @@ import (
 )
 
 var (
-	httpPort      = flag.String("http", "8000", "HTTP server port")
-	grpcPort      = flag.String("grpc", "9000", "gRPC server port")
-	header        = flag.String("header", "x-forwarded-sub", "HTTP Header key identifying the connected client")
-	configuration = flag.String("clients", "/var/run/jarl/clients", "Folder containing the clients configurations")
+	httpPort      = flag.String("h", "8000", "HTTP server port")
+	grpcPort      = flag.String("g", "9000", "gRPC server port")
+	header        = flag.String("a", "x-forwarded-sub", "HTTP Header key identifying the connected client")
+	configuration = flag.String("c", "/var/run/jarl/configuration", "Folder containing the clients configurations")
 )
 
 func main() {

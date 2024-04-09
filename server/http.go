@@ -50,7 +50,12 @@ func (srv *HTTPAuthzServer) Start(wg *sync.WaitGroup, healthFunc func() (bool, s
 	mux.HandleFunc("/healtz", handleHealth(healthFunc))
 
 	srv.httpServer = &http.Server{Handler: mux}
-	srv.ready <- true // for testing
+	select {
+	case srv.ready <- true:
+		fmt.Println("Notified test cases")
+	default:
+		fmt.Println("No test cases running")
+	}
 	srv.state = Serving
 	slog.Info(fmt.Sprintf("starting jarl http authz server at '%s", listener.Addr()))
 
