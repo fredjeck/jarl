@@ -6,6 +6,10 @@ Jarl is a custom authorization system for Istio compatible with the [Envoy ext_a
 
 Jarl supports authorization check request using either HTTP (port 8000) or gRPC v2/v3 (port 9000) API 
 
+# Docker image
+
+Official docker image can be found on dockehub : [fredjeck/jarl](https://hub.docker.com/repository/docker/fredjeck/jarl/general)
+
 # Configuration
 
 At startup Jarl will load all the provided client authorizationf files located at **/var/run/jarl/configuation** which shall be provided as a mount point.
