@@ -18,30 +18,33 @@ COPY . .
 
 # build
 RUN go build -o /go/src/github.com/fredjeck/jarl/bin/jarl ./cmd/jarl
-# create a default directory for the configuration in order to copy it to the runtime image as mkdir is not available on distroless
-RUN mkdir -p /var/run/jarl/configuration
+
 
 # use a distroless base image with glibc
-FROM gcr.io/distroless/base-debian12:nonroot
+FROM alpine:3.19
 
-LABEL org.opencontainers.image.source="hhttps://github.com/fredjeck/jarl"
+LABEL org.opencontainers.image.source="https://github.com/fredjeck/jarl"
+
+RUN apk update && \
+    apk add --no-cache shadow && \
+    groupadd muggles && \
+    useradd -ms /bin/sh -G muggles jarl
 
 # copy our compiled binary
-COPY --from=builder --chown=nonroot /go/src/github.com/fredjeck/jarl/bin/jarl /usr/local/bin/
-COPY --from=builder --chown=nonroot /var/run/jarl/configuration /var/run/jarl/configuration
+COPY --from=builder --chown=jarl /go/src/github.com/fredjeck/jarl/bin/jarl /usr/local/bin/
+
+RUN mkdir -p /var/run/jarl/configuration
+RUN chown jarl /var/run/jarl/configuration
 
 # run as non-privileged user
-USER nonroot
+USER jarl
 
-ARG PORT_GRPC=9000
-ARG PORT_HTTP=8000
-ARG AUTHZ_HEADER=x-forwarded-sub
-ARG CONFIGURATION=/var/run/jarl/configuration
-ENV CONFIGURATION=${CONFIGURATION}
+ENV PORT_GRPC=9000
+ENV PORT_HTTP=8000
+ENV AUTHZ_HEADER=x-forwarded-sub
 
 # command / entrypoint of container
-ENTRYPOINT ["jarl"]
-#,"-h","$PORT_HTTP","-g","$PORT_HTTP","-a","$AUTHZ_HEADER","-c",$CONFIGURATION]
+ENTRYPOINT jarl -h  ${PORT_HTTP} -g ${PORT_GRPC} -a ${AUTHZ_HEADER}
 
-EXPOSE  $PORT_GRPC
-EXPOSE  $PORT_HTTP
+EXPOSE ${PORT_HTTP}
+EXPOSE ${PORT_GRPC}

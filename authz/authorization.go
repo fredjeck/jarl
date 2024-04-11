@@ -65,6 +65,7 @@ const (
 // Authorization is the internal representation of a client configuration
 type Authorization struct {
 	ClientID  string
+	Aliases   []string
 	Allow     bool
 	Endpoints map[HTTPMethod][]*regexp.Regexp
 }
@@ -73,6 +74,7 @@ type Authorization struct {
 func NewAuthorization() *Authorization {
 	return &Authorization{
 		Endpoints: make(map[HTTPMethod][]*regexp.Regexp),
+		Aliases:   make([]string, 0),
 	}
 }
 
@@ -84,6 +86,14 @@ var (
 )
 
 // NewAuthorizationFromYaml Geneates a new authorization configration from the provided yaml content
+//
+// Expected yaml format
+// cliendID
+// mode: allow # or deny
+// paths:
+//   - /single.*?/path # Single pat regex
+//   - path: /other path
+//     methods: GET, PUT, ALL # Http methods to look for
 func NewAuthorizationFromYaml(contents []byte) (*Authorization, error) {
 	auth := NewAuthorization()
 
@@ -102,6 +112,13 @@ func NewAuthorizationFromYaml(contents []byte) (*Authorization, error) {
 	m, ok := yamlMap["mode"]
 	if !ok {
 		return nil, ErrInvalidMode
+	}
+
+	aliases, ok := yamlMap["aliases"]
+	if ok {
+		for _, a := range aliases.([]interface{}) {
+			auth.Aliases = append(auth.Aliases, a.(string))
+		}
 	}
 
 	mode := strings.ToLower(m.(string))

@@ -130,7 +130,7 @@ func TestExtAuthz(t *testing.T) {
 
 	// Prepare the gRPC request.
 	_ = <-server.grpcServer.ready
-	conn, err := grpc.NewClient(fmt.Sprintf("localhost:%d", 9000), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(fmt.Sprintf("localhost:%d", server.grpcServer.port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}

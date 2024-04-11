@@ -3,6 +3,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 )
 
@@ -56,6 +57,7 @@ func (s *JarlAuthzServer) Stop() {
 
 // NewJarlAuthzServer instantiates a new Authz server based on the provided configuration
 func NewJarlAuthzServer(conf *Configuration) *JarlAuthzServer {
+	slog.Info(fmt.Sprintf("configuring jarl using headers['%s'] as authz content attribute", conf.HTTPAuthZHeader))
 	return &JarlAuthzServer{
 		grpcServer: NewGRPCAuthzServer(conf),
 		httpServer: NewHTTPAuthzServer(conf),

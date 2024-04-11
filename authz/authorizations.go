@@ -87,7 +87,11 @@ func LoadAll(dir string) (*Authorizations, error) {
 			if err != nil {
 				slog.Error(fmt.Sprintf("unable to load '%s' see details for errors", path), slog.Any("error", err))
 			}
+			slog.Info(fmt.Sprintf("%s (aliases: %s) - loaded authorizations from '%s'", conf.ClientID, conf.Aliases, path))
 			authz.authorizations[conf.ClientID] = conf
+			for _, alias := range conf.Aliases {
+				authz.authorizations[alias] = conf
+			}
 		}
 
 		return nil

@@ -19,3 +19,7 @@
 
 # Go workspace file
 go.work
+
+#local elastic
+assets/elastic/data/*
+!assets/elastic/data/.gitkeep

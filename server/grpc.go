@@ -57,9 +57,9 @@ func (srv *GRPCAuthzServer) Start(wg *sync.WaitGroup) {
 
 	select {
 	case srv.ready <- true:
-		fmt.Println("Notified test cases")
+		slog.Info(fmt.Sprintf("advertised status to test case listeners"))
 	default:
-		fmt.Println("No test cases running")
+		slog.Info(fmt.Sprintf("no GRPC test cases listener found...skipping"))
 	}
 	srv.state = Serving
 

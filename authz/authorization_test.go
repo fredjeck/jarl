@@ -267,3 +267,19 @@ paths:
 	assert.NoError(t, err)
 	assert.Len(t, auth.Endpoints, 1)
 }
+
+func TestAliases(t *testing.T) {
+	yml := `
+clientID: client
+mode: allow
+aliases:
+  - client.dev
+  - client.int
+paths:
+  - /api/encounter
+`
+
+	auth, err := NewAuthorizationFromYaml([]byte(yml))
+	assert.NoError(t, err)
+	assert.Len(t, auth.Aliases, 2)
+}
