@@ -81,6 +81,7 @@ func handleHealth(healthFunc func() (bool, string)) func(w http.ResponseWriter, 
 		} else {
 			response.WriteHeader(http.StatusBadRequest)
 		}
+		slog.Info(fmt.Sprintf("jarl health status is '%s'", desc))
 		response.Write([]byte(desc))
 	}
 }
