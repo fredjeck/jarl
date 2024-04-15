@@ -121,7 +121,7 @@ func TestHealth(t *testing.T) {
 	go server.Start()
 	// Wait until HTTP Server is ready
 	_ = <-server.httpServer.ready
-	_ = <-server.grpcServer.ready // Wait until HTTP Server is ready
+	_ = <-server.grpcServer.ready // Wait until HTTP Server is readydenied
 
 	httpReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/healthz", server.httpServer.port), nil)
 	if err != nil {

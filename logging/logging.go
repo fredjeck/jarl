@@ -75,11 +75,12 @@ func AuthV2LoggingContext(request *authv2.CheckRequest) *Context {
 
 // LogRequest logs an inbout request details
 func LogRequest(allow bool, reason string, context *Context) {
-	outcome := "allowed"
-	msg := fmt.Sprintf("%s %s %s for '%s'", context.Method, context.Path, outcome, context.ClientID)
+	outcome := "ALLOWED"
 	if !allow {
-		outcome = "denied"
+		outcome = "DENIED"
 	}
+
+	msg := fmt.Sprintf("%s %s %s for '%s' from %s", context.Method, context.Path, outcome, context.ClientID, context.Host)
 
 	slog.Info(msg,
 		slog.Bool(KeyAllow, allow),
