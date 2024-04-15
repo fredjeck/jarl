@@ -216,10 +216,10 @@ paths:
 
 	auth, err := NewAuthorizationFromYaml([]byte(yml))
 	assert.NoError(t, err)
-	assert.True(t, auth.IsAllowed("/api/pokemon/ditto", HTTPMethodGet))
-	assert.False(t, auth.IsAllowed("/api/encounter", HTTPMethodGet))
-	assert.True(t, auth.IsAllowed("/api/encounter", HTTPMethodPut))
-	assert.True(t, auth.IsAllowed("/api/pokemon/pikachu", HTTPMethodPut))
+	assert.True(t, auth.IsAllowed("localhost", "/api/pokemon/ditto", HTTPMethodGet))
+	assert.False(t, auth.IsAllowed("localhost", "/api/encounter", HTTPMethodGet))
+	assert.True(t, auth.IsAllowed("localhost", "/api/encounter", HTTPMethodPut))
+	assert.True(t, auth.IsAllowed("localhost", "/api/pokemon/pikachu", HTTPMethodPut))
 }
 
 func TestPathIsDisallowed(t *testing.T) {
@@ -234,10 +234,10 @@ paths:
 
 	auth, err := NewAuthorizationFromYaml([]byte(yml))
 	assert.NoError(t, err)
-	assert.True(t, auth.IsAllowed("/api/pokemon/ditto", HTTPMethodGet))
-	assert.False(t, auth.IsAllowed("/api/encounter", HTTPMethodPut))
-	assert.True(t, auth.IsAllowed("/api/encounter", HTTPMethodGet))
-	assert.False(t, auth.IsAllowed("/api/pokemon/pikachu", HTTPMethodPut))
+	assert.True(t, auth.IsAllowed("localhost", "/api/pokemon/ditto", HTTPMethodGet))
+	assert.False(t, auth.IsAllowed("localhost", "/api/encounter", HTTPMethodPut))
+	assert.True(t, auth.IsAllowed("localhost", "/api/encounter", HTTPMethodGet))
+	assert.False(t, auth.IsAllowed("localhost", "/api/pokemon/pikachu", HTTPMethodPut))
 }
 
 func TestHTTPMethodParsing(t *testing.T) {
@@ -268,18 +268,44 @@ paths:
 	assert.Len(t, auth.Endpoints, 1)
 }
 
-func TestAliases(t *testing.T) {
+func TestHosts(t *testing.T) {
 	yml := `
 clientID: client
 mode: allow
-aliases:
-  - client.dev
-  - client.int
+hosts:
+  - localhost
+  - 127.0.0.1
 paths:
   - /api/encounter
 `
 
 	auth, err := NewAuthorizationFromYaml([]byte(yml))
 	assert.NoError(t, err)
-	assert.Len(t, auth.Aliases, 2)
+	assert.Len(t, auth.Hosts, 2)
+}
+
+func TestHostisAllwed(t *testing.T) {
+	yml := `
+clientID: client
+mode: allow
+hosts:
+  - localhost
+paths:
+  - path: /api/pokemon/.*?
+    methods: get
+  - path: /api/encounter
+    methods: put
+  - path: /api/pokemon/pikachu
+`
+
+	auth, err := NewAuthorizationFromYaml([]byte(yml))
+	assert.NoError(t, err)
+	assert.True(t, auth.IsAllowed("localhost", "/api/pokemon/ditto", HTTPMethodGet))
+	assert.False(t, auth.IsAllowed("jarl.com", "/api/pokemon/ditto", HTTPMethodGet))
+	assert.False(t, auth.IsAllowed("localhost", "/api/encounter", HTTPMethodGet))
+	assert.False(t, auth.IsAllowed("jarl.com", "/api/pokemon/ditto", HTTPMethodGet))
+	assert.True(t, auth.IsAllowed("localhost", "/api/encounter", HTTPMethodPut))
+	assert.True(t, auth.IsAllowed("localhost", "/api/pokemon/pikachu", HTTPMethodPut))
+	assert.False(t, auth.IsAllowed("jarl.com", "/api/encounter", HTTPMethodPut))
+	assert.False(t, auth.IsAllowed("jarl.com", "/api/pokemon/pikachu", HTTPMethodPut))
 }

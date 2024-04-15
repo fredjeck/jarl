@@ -65,7 +65,7 @@ const (
 // Authorization is the internal representation of a client configuration
 type Authorization struct {
 	ClientID  string
-	Aliases   []string
+	Hosts     []string
 	Allow     bool
 	Endpoints map[HTTPMethod][]*regexp.Regexp
 }
@@ -74,7 +74,7 @@ type Authorization struct {
 func NewAuthorization() *Authorization {
 	return &Authorization{
 		Endpoints: make(map[HTTPMethod][]*regexp.Regexp),
-		Aliases:   make([]string, 0),
+		Hosts:     make([]string, 0),
 	}
 }
 
@@ -114,10 +114,10 @@ func NewAuthorizationFromYaml(contents []byte) (*Authorization, error) {
 		return nil, ErrInvalidMode
 	}
 
-	aliases, ok := yamlMap["aliases"]
+	aliases, ok := yamlMap["hosts"]
 	if ok {
 		for _, a := range aliases.([]interface{}) {
-			auth.Aliases = append(auth.Aliases, a.(string))
+			auth.Hosts = append(auth.Hosts, a.(string))
 		}
 	}
 
@@ -175,10 +175,21 @@ func NewAuthorizationFromYaml(contents []byte) (*Authorization, error) {
 }
 
 // IsAllowed returns true if the provided path access should be granted
-func (auth *Authorization) IsAllowed(path string, method HTTPMethod) bool {
+func (auth *Authorization) IsAllowed(host string, path string, method HTTPMethod) bool {
 
 	endpoints, ok := auth.Endpoints[method]
 	if ok {
+
+		if len(auth.Hosts) > 0 {
+			hostFound := false
+			for _, h := range auth.Hosts {
+				hostFound = h == host
+			}
+			if !hostFound {
+				return false
+			}
+		}
+
 		for _, p := range endpoints {
 			if p.MatchString(path) {
 				return auth.Allow

@@ -32,7 +32,7 @@ func (a *Authorizations) Add(auth *Authorization) error {
 }
 
 // IsAllowed ensures the provided clientID is configured for accessing the provided path with the given method
-func (a *Authorizations) IsAllowed(clientID string, path string, method HTTPMethod) (bool, error) {
+func (a *Authorizations) IsAllowed(host string, clientID string, path string, method HTTPMethod) (bool, error) {
 
 	if len(a.authorizations) == 0 {
 		return true, nil // No configuration found we allow a passthrough
@@ -42,7 +42,7 @@ func (a *Authorizations) IsAllowed(clientID string, path string, method HTTPMeth
 	allowed := true
 
 	auth, authFound := a.authorizations[clientID]
-	if !authFound || !auth.IsAllowed(path, method) {
+	if !authFound || !auth.IsAllowed(host, path, method) {
 		allowed = false
 		if !authFound {
 			reason = fmt.Sprintf("no authz configuration defined for %s", clientID)
@@ -87,11 +87,8 @@ func LoadAll(dir string) (*Authorizations, error) {
 			if err != nil {
 				slog.Error(fmt.Sprintf("unable to load '%s' see details for errors", path), slog.Any("error", err))
 			}
-			slog.Info(fmt.Sprintf("%s (aliases: %s) - loaded authorizations from '%s'", conf.ClientID, conf.Aliases, path))
+			slog.Info(fmt.Sprintf("%s - loaded authorizations from '%s'", conf.ClientID, path))
 			authz.authorizations[conf.ClientID] = conf
-			for _, alias := range conf.Aliases {
-				authz.authorizations[alias] = conf
-			}
 		}
 
 		return nil

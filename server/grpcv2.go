@@ -72,15 +72,16 @@ func (s *GRPCAuthzServerV2) deny(request *authv2.CheckRequest, reason string) *a
 // Check implements gRPC v2 check request.
 func (s *GRPCAuthzServerV2) Check(_ context.Context, request *authv2.CheckRequest) (*authv2.CheckResponse, error) {
 	attrs := request.GetAttributes()
+	httpAttrs := attrs.GetRequest().GetHttp()
 	method := authz.HTTPMethod(attrs.Request.Http.Method)
 	// Determine whether to allow or deny the request.
-	clientID, headerExists := attrs.GetRequest().GetHttp().GetHeaders()[s.AuthzHeader]
+	clientID, headerExists := httpAttrs.GetHeaders()[s.AuthzHeader]
 
 	reason := ""
 	allowed := true
 
 	if headerExists {
-		al, err := s.Authorizations.IsAllowed(clientID, attrs.Request.Http.Path, method)
+		al, err := s.Authorizations.IsAllowed(httpAttrs.Host, clientID, attrs.Request.Http.Path, method)
 		if err != nil {
 			reason = err.Error()
 		}

@@ -18,9 +18,9 @@ Client configurations are simple yaml files defining the paths the client is all
 
 ```yaml
 clientID: client # identifier found in the specified header which will be used by Jarl to map the configuration
-aliases:
-  - client.int
-  - client.dev
+hosts: # list of allowed inbound hosts
+  - localhost
+  - my.gateway.com
 mode: allow # allow / deny
 paths: # list of paths for this client
   - /pokemon/pikachu

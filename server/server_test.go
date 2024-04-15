@@ -35,6 +35,8 @@ const checkHeader = "x-forwarded-sub"
 const clientA = `
 clientID: clientA
 mode: allow
+hosts:
+  - localhost
 paths:
   - path: /pokemon/.*?
     methods: GET, PUT
@@ -49,6 +51,7 @@ paths:
 
 type testCase struct {
 	name     string
+	host     string
 	url      string
 	method   string
 	clientID string
@@ -58,6 +61,7 @@ type testCase struct {
 var testCases = []testCase{
 	{
 		name:     "Allow GET",
+		host:     "localhost",
 		url:      "/pokemon/pikachu",
 		clientID: "clientA",
 		method:   http.MethodGet,
@@ -65,6 +69,7 @@ var testCases = []testCase{
 	},
 	{
 		name:     "Allow PUT",
+		host:     "localhost",
 		url:      "/pokemon/tortank",
 		clientID: "clientA",
 		method:   http.MethodPut,
@@ -72,6 +77,7 @@ var testCases = []testCase{
 	},
 	{
 		name:     "Deny DELETE",
+		host:     "localhost",
 		url:      "/pokemon/ditto",
 		clientID: "clientA",
 		method:   http.MethodDelete,
@@ -79,6 +85,7 @@ var testCases = []testCase{
 	},
 	{
 		name:     "Deny URL",
+		host:     "localhost",
 		url:      "/berries",
 		clientID: "clientA",
 		method:   http.MethodDelete,
@@ -86,6 +93,7 @@ var testCases = []testCase{
 	},
 	{
 		name:     "Deny URL",
+		host:     "localhost",
 		url:      "/pokemon/pikachu",
 		clientID: "clientB",
 		method:   http.MethodGet,
@@ -93,6 +101,7 @@ var testCases = []testCase{
 	},
 	{
 		name:     "Allow URL",
+		host:     "localhost",
 		url:      "/encounters",
 		clientID: "clientB",
 		method:   http.MethodGet,
@@ -100,6 +109,7 @@ var testCases = []testCase{
 	},
 	{
 		name:     "Deny Client",
+		host:     "localhost",
 		url:      "/gyms",
 		clientID: "clientC",
 		method:   http.MethodGet,
@@ -186,7 +196,7 @@ func runGrpcV3Request(t *testing.T, tc testCase, grpcV3Client authv3.Authorizati
 		Attributes: &authv3.AttributeContext{
 			Request: &authv3.AttributeContext_Request{
 				Http: &authv3.AttributeContext_HttpRequest{
-					Host:    "localhost",
+					Host:    tc.host,
 					Path:    tc.url,
 					Method:  tc.method,
 					Headers: map[string]string{checkHeader: tc.clientID},
