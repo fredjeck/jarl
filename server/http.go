@@ -47,7 +47,7 @@ func (srv *HTTPAuthzServer) Start(wg *sync.WaitGroup, healthFunc func() (bool, s
 	srv.port = listener.Addr().(*net.TCPAddr).Port
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healtz", handleHealth(healthFunc))
+	mux.HandleFunc("/healthz", handleHealth(healthFunc))
 
 	srv.httpServer = &http.Server{Handler: mux}
 	select {

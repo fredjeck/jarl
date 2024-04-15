@@ -24,6 +24,7 @@ import (
 	authv3 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"github.com/fredjeck/jarl/authz"
 	"github.com/fredjeck/jarl/logging"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -104,6 +105,36 @@ var testCases = []testCase{
 		method:   http.MethodGet,
 		want:     int(codes.PermissionDenied),
 	},
+}
+
+func TestHealth(t *testing.T) {
+	logging.Setup()
+
+	server := NewJarlAuthzServer(&Configuration{
+		HTTPListenOn:    "localhost:0",
+		GRPCListenOn:    "localhost:0",
+		HTTPAuthZHeader: checkHeader,
+		Authorizations:  authz.NewAuthorizations(),
+	})
+
+	// Start the test server on random port.
+	go server.Start()
+	// Wait until HTTP Server is ready
+	_ = <-server.httpServer.ready
+	_ = <-server.grpcServer.ready // Wait until HTTP Server is ready
+
+	httpReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/healthz", server.httpServer.port), nil)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	httpClient := &http.Client{}
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	assert.Equal(t, 200, resp.StatusCode)
 }
 
 func TestExtAuthz(t *testing.T) {
