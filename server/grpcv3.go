@@ -97,7 +97,9 @@ func (s *GRPCAuthzServerV3) Check(_ context.Context, request *authv3.CheckReques
 	ctx.ClientID = clientID
 	logging.LogRequest(allowed, reason, ctx)
 	if allowed {
+		allowedCounter.Inc()
 		return s.allow(request), nil
 	}
+	deniedCounter.WithLabelValues(clientID).Inc()
 	return s.deny(request, "missing authz header"), nil
 }

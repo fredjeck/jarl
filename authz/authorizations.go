@@ -27,6 +27,7 @@ func (a *Authorizations) Add(auth *Authorization) error {
 	if len(auth.ClientID) == 0 {
 		return errors.New("cannot add an empty clientID")
 	}
+	slog.Info(fmt.Sprintf("Adding configuration for clientID '%s'", auth.ClientID))
 	a.authorizations[auth.ClientID] = auth
 	return nil
 }

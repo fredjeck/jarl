@@ -8,23 +8,22 @@ import (
 	"sync"
 
 	"github.com/fredjeck/jarl/logging"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // HTTPAuthzServer implements an Envoy custom HTTP authorization filter
 // Please note that HTTP authorization server has been disabled - old code can be found in tag 0.0.1-alpha
-// HTTP Server is only kept for health check purposes
+// HTTP Server is only kept for health check and metrics purposes
 type HTTPAuthzServer struct {
 	httpServer    *http.Server
 	configuration *Configuration
 	port          int
-	ready         chan bool
 	state         ServingStatus
 }
 
 // NewHTTPAuthzServer instantiates a new HTTPAuthzServer but does not start it
 func NewHTTPAuthzServer(configuration *Configuration) *HTTPAuthzServer {
 	return &HTTPAuthzServer{
-		ready:         make(chan bool),
 		state:         Stopped,
 		configuration: configuration,
 	}
@@ -48,19 +47,15 @@ func (srv *HTTPAuthzServer) Start(wg *sync.WaitGroup, healthFunc func() (bool, s
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handleHealth(healthFunc))
+	mux.Handle("/metrics", promhttp.Handler())
 
 	srv.httpServer = &http.Server{Handler: mux}
-	select {
-	case srv.ready <- true:
-		slog.Info(fmt.Sprintf("advertised status to test case listeners"))
-	default:
-		slog.Info(fmt.Sprintf("no HTTP test cases listener found...skipping"))
-	}
-	srv.state = Serving
-	slog.Info(fmt.Sprintf("starting jarl http authz server at '%s", listener.Addr()))
 
+	slog.Info(fmt.Sprintf("starting jarl http authz server at '%s", listener.Addr()))
+	srv.state = Serving
 	if err := srv.httpServer.Serve(listener); err != nil {
 		slog.Error(fmt.Sprintf("failed to start jarl http authz server at '%v'", srv.configuration.HTTPListenOn), slog.Any(logging.KeyError, err))
+		srv.state = Stopped
 	}
 }
 

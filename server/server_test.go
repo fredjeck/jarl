@@ -17,8 +17,10 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"testing"
+	"time"
 
 	authv2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	authv3 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
@@ -129,9 +131,8 @@ func TestHealth(t *testing.T) {
 
 	// Start the test server on random port.
 	go server.Start()
-	// Wait until HTTP Server is ready
-	_ = <-server.httpServer.ready
-	_ = <-server.grpcServer.ready // Wait until HTTP Server is readydenied
+
+	waitForServer(server)
 
 	httpReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/healthz", server.httpServer.port), nil)
 	if err != nil {
@@ -166,11 +167,8 @@ func TestExtAuthz(t *testing.T) {
 	// Start the test server on random port.
 	go server.Start()
 
-	// Wait until HTTP Server is ready
-	_ = <-server.httpServer.ready
+	waitForServer(server)
 
-	// Prepare the gRPC request.
-	_ = <-server.grpcServer.ready
 	conn, err := grpc.NewClient(fmt.Sprintf("localhost:%d", server.grpcServer.port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -237,4 +235,18 @@ func runGrpcV2Request(t *testing.T, tc testCase, grpcV2Client authv2.Authorizati
 		t.Errorf("'%s' want %d but got %d", tc.name, tc.want, int(resp.Status.Code))
 	}
 	return
+}
+
+// waitForServer waits until the server is healty and serving requests
+func waitForServer(server *JarlAuthzServer) {
+	backoff := 100 * time.Millisecond
+	for i := 0; i < 10; i++ {
+		healthy, _ := server.Healthy()
+		if !healthy {
+			time.Sleep(backoff)
+			continue
+		}
+		return
+	}
+	log.Fatalf("Server not started after 10 attempts")
 }

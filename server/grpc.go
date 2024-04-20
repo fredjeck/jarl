@@ -19,7 +19,6 @@ type GRPCAuthzServer struct {
 	grpcServer    *grpc.Server
 	configuration *Configuration
 	port          int
-	ready         chan bool
 	state         ServingStatus
 	grpcV2        *GRPCAuthzServerV2
 	grpcV3        *GRPCAuthzServerV3
@@ -29,7 +28,6 @@ type GRPCAuthzServer struct {
 func NewGRPCAuthzServer(configuration *Configuration) *GRPCAuthzServer {
 	return &GRPCAuthzServer{
 		configuration: configuration,
-		ready:         make(chan bool),
 		state:         Stopped,
 	}
 }
@@ -55,17 +53,11 @@ func (srv *GRPCAuthzServer) Start(wg *sync.WaitGroup) {
 	authv3.RegisterAuthorizationServer(srv.grpcServer, &GRPCAuthzServerV3{AuthzHeader: srv.configuration.HTTPAuthZHeader, Authorizations: srv.configuration.Authorizations})
 	grpc_health_v1.RegisterHealthServer(srv.grpcServer, health.NewServer())
 
-	select {
-	case srv.ready <- true:
-		slog.Info(fmt.Sprintf("advertised status to test case listeners"))
-	default:
-		slog.Info(fmt.Sprintf("no GRPC test cases listener found...skipping"))
-	}
-	srv.state = Serving
-
 	slog.Info(fmt.Sprintf("starting jarl GRPC authz server at '%s", listener.Addr()))
+	srv.state = Serving
 	if err := srv.grpcServer.Serve(listener); err != nil {
 		slog.Error(fmt.Sprintf("failed to start jarl grpc authz server at '%s'", listener.Addr()), slog.Any(logging.KeyError, err))
+		srv.state = Stopped
 	}
 }
 

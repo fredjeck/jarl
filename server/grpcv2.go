@@ -88,6 +88,7 @@ func (s *GRPCAuthzServerV2) Check(_ context.Context, request *authv2.CheckReques
 		allowed = al
 	} else {
 		allowed = false
+		deniedCounter.WithLabelValues("missing").Inc()
 		reason = fmt.Sprintf("missing authz configuration header %s", s.AuthzHeader)
 	}
 
@@ -95,7 +96,9 @@ func (s *GRPCAuthzServerV2) Check(_ context.Context, request *authv2.CheckReques
 	ctx.ClientID = clientID
 	logging.LogRequest(allowed, reason, ctx)
 	if allowed {
+		allowedCounter.Inc()
 		return s.allow(request), nil
 	}
+	deniedCounter.WithLabelValues(clientID).Inc()
 	return s.deny(request, "missing authz header"), nil
 }
