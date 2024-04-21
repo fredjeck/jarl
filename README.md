@@ -4,7 +4,7 @@
 
 Jarl is a custom authorization system for Istio compatible with the [Envoy ext_authz_filer](https://www.envoyproxy.io/docs/envoy/v1.16.0/intro/arch_overview/security/ext_authz_filter) based on the [istio provided example](https://github.com/istio/istio/tree/master/samples/extauthz)
 
-Jarl supports authorization check request using either HTTP (port 8000) or gRPC v2/v3 (port 9000) API 
+Jarl supports authorization check request using the gRPC v2/v3 (port 9000) API 
 
 # Docker image
 
@@ -17,15 +17,15 @@ At startup Jarl will load all the provided client authorizationf files located a
 Client configurations are simple yaml files defining the paths the client is allowed or denied to access
 
 ```yaml
-clientID: client # identifier found in the specified header which will be used by Jarl to map the configuration
+clientID: client # identifier found in the specified header field which will be used by Jarl to map the configuration
 hosts: # list of allowed inbound hosts
   - localhost
   - my.gateway.com
-mode: allow # allow / deny
+mode: allow # allow / deny - if allow is set then only the listed paths are allowed, if deny is selected Jarl will allow all the paths except the ones listed below
 paths: # list of paths for this client
-  - /pokemon/pikachu
+  - /pokemon/pikachu # Shorthand notation no http method is checkd
   - path: /pokemon
-    methods: GET, POST
+    methods: GET, POST # List of HTTP methods allowed for the path
   - path: /pokemon/tortank
     methods: POST
   - /pokemon/ditto
@@ -35,7 +35,14 @@ paths: # list of paths for this client
     methods: DELETE
 ```
 
-## Supported environment variables
+## Command line arguments
+
+- _-h_ : http server port, default 8000
+- _-g_ : grpc server port, default 9000
+- _-a_ : http header field name which should contain the client authentication
+- _-c_ : path to the folder where client configuration can be found
+
+## Supported docker environment variables
 
 ```docker
 ENV PORT_GRPC=9000 # GRPC port
@@ -51,4 +58,8 @@ For a given client ID Jarl can either work in *deny* or *allow* mode :
 
 ## Health check
 
-Jarl support both standard GRPC health check and HTTP health check at the **/health** url
+Jarl support both standard GRPC health check and HTTP health check at the **/healthz** url
+
+## Metrics
+
+Jarl implements prometheus support for metrics via the **"/metrics"**
