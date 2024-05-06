@@ -80,7 +80,7 @@ func LogRequest(allow bool, reason string, context *Context) {
 		outcome = "DENIED"
 	}
 
-	msg := fmt.Sprintf("%s %s %s for '%s' from %s", context.Method, context.Path, outcome, context.ClientID, context.Host)
+	msg := fmt.Sprintf("%s %s %s for '%s' from '%s'", context.Method, context.Path, outcome, context.ClientID, context.Host)
 
 	slog.Info(msg,
 		slog.Bool(KeyAllow, allow),

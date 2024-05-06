@@ -5,8 +5,10 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
+	"github.com/fredjeck/jarl/authz"
 	"github.com/fredjeck/jarl/logging"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -48,6 +50,7 @@ func (srv *HTTPAuthzServer) Start(wg *sync.WaitGroup, healthFunc func() (bool, s
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handleHealth(healthFunc))
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/*", handleCheck(srv.configuration))
 
 	srv.httpServer = &http.Server{Handler: mux}
 
@@ -78,5 +81,56 @@ func handleHealth(healthFunc func() (bool, string)) func(w http.ResponseWriter, 
 		}
 		slog.Info(fmt.Sprintf("jarl health status is '%s'", desc))
 		response.Write([]byte(desc))
+	}
+}
+
+// Handles authorization requests
+func handleCheck(_ *Configuration) func(w http.ResponseWriter, r *http.Request) {
+	return func(response http.ResponseWriter, request *http.Request) {
+		// host := request.Header.Get(config.HTTPHostHeader)
+		// clientID := request.Header.Get(config.HTTPAuthZHeader)
+		clientID := "unset"
+		path := request.URL.Path
+		method := authz.ParseHTTPMethod(request.Method)
+		// headerExists := clientID != "" && host != ""
+
+		reason := ""
+		allowed := true
+
+		// if headerExists {
+		// 	al, err := config.Authorizations.IsAllowed(host, clientID, path, method)
+		// 	if err != nil {
+		// 		reason = err.Error()
+		// 	}
+		// 	allowed = al
+		// } else {
+		// 	allowed = false
+		// 	reason = fmt.Sprintf("missing authz or host configuration header %s/%s", config.HTTPAuthZHeader, config.HTTPHostHeader)
+		// }
+
+		headers := make(map[string]string)
+		for k, v := range request.Header {
+			headers[strings.ToLower(k)] = string(v[0])
+		}
+
+		ctx := &logging.Context{
+			// ClientID: clientID,
+			// Host:     host,
+			Path:    path,
+			Method:  string(method),
+			Headers: headers,
+		}
+
+		logging.LogRequest(allowed, reason, ctx)
+		if allowed {
+			allowedCounter.Inc()
+			response.Header().Set(resultHeader, resultAllowed)
+			response.WriteHeader(http.StatusOK)
+		} else {
+			deniedCounter.WithLabelValues(clientID).Inc()
+			response.Header().Set(resultHeader, resultDenied)
+			response.WriteHeader(http.StatusForbidden)
+			response.Write([]byte(fmt.Sprintf("{'status':'denied', 'reason':%s}", reason)))
+		}
 	}
 }

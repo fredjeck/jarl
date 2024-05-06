@@ -169,7 +169,7 @@ func TestExtAuthz(t *testing.T) {
 
 	waitForServer(server)
 
-	conn, err := grpc.NewClient(fmt.Sprintf("localhost:%d", server.grpcServer.port), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(fmt.Sprintf("localhost:%d", 9000), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
